@@ -1,6 +1,7 @@
 --[[
     СКРИПТ ПОЛНОСТЬЮ ПЕРЕНЕСЕН НА RAYFIELD
-    ИСПРАВЛЕНА ОШИБКА С ЗАГРУЗКОЙ ВКЛАДОК (удалены ID иконок)
+    ИСПРАВЛЕНО: Все функции объединены во вкладке "Main",
+    чтобы избежать ошибок загрузки других вкладок.
 ]]
 
 -- ================================================================= --
@@ -16,7 +17,7 @@ local Window = Rayfield:CreateWindow({
         Enabled = true,
         FileName = "SCPRP_Hub_Config"
     },
-    ToggleKey = Enum.KeyCode.K -- Вот твой бинд на 'K'.
+    ToggleKey = Enum.KeyCode.K -- Бинд на 'K'.
 })
 
 -- Глобальные переменные из старого скрипта
@@ -56,7 +57,7 @@ fovCircle.Filled = false
 fovCircle.Transparency = 1
 
 -- ================================================================= --
--- 2. ВСЕ ФУНКЦИИ ИЗ СТАРОГО СКРИПТА
+-- 2. ВСЕ ФУНКЦИИ ИЗ СТАРОГО СКРИПTA (ЛОГИКА)
 -- ================================================================= --
 
 local function getTeamAlliance(teamName)
@@ -269,13 +270,12 @@ pcall(function()
 end)
 
 -- ================================================================= --
--- 3. СОЗДАНИЕ ВКЛАДОК И ЭЛЕМЕНТОВ RAYFIELD
+-- 3. СОЗДАНИЕ ОДНОЙ ВКЛАДКИ "MAIN"
 -- ================================================================= --
 
--- Вкладка "Main"
--- ИСПРАВЛЕНО: УБРАНЫ ID ИКОНОК
 local mainTab = Window:CreateTab("Main")
 
+mainTab:CreateLabel("--- ОСНОВНЫЕ ФУНКЦИИ ---")
 mainTab:CreateButton({
    Name = "Hide Menu (K)",
    Callback = function()
@@ -351,12 +351,8 @@ mainTab:CreateButton({
    end,
 })
 
--- Вкладка "Teleports"
--- ИСПРАВЛЕНО: УБРАНЫ ID ИКОНОК
-local tpTab = Window:CreateTab("Teleports")
-
-tpTab:CreateLabel("Area TP")
-tpTab:CreateButton({
+mainTab:CreateLabel("--- ТЕЛЕПОРТЫ (Teleports) ---")
+mainTab:CreateButton({
    Name = "Tp To Selected Area",
    Callback = function()
         pcall(function()
@@ -386,16 +382,14 @@ tpTab:CreateButton({
         end)
    end,
 })
-tpTab:CreateDropdown({
+mainTab:CreateDropdown({
    Name = "Select Area",
    List = {"Sector 1", "Sector 2-1", "Sector 2-2", "Sector 3", "Bunker", "Control Room", "Transformer", "Class D Containment", "Class D Viewing", "Heli Pad", "Shooting Range"},
    Callback = function(c)
         d = c 
    end,
 })
-
-tpTab:CreateLabel("SCP TP")
-tpTab:CreateButton({
+mainTab:CreateButton({
    Name = "Tp To SCP Containment",
    Callback = function()
         pcall(function()
@@ -435,16 +429,14 @@ tpTab:CreateButton({
         end)
    end,
 })
-tpTab:CreateDropdown({
+mainTab:CreateDropdown({
    Name = "Select SCP Containment",
    List = {"008", "096", "049", "173", "966", "457", "999", "023", "008 Deconstructor", "002", "2950", "131", "066", "409", "1299", "1025"},
    Callback = function(l)
         r = l
    end,
 })
-
-tpTab:CreateLabel("Spawn TP")
-tpTab:CreateButton({
+mainTab:CreateButton({
    Name = "Tp To Selected Spawn",
    Callback = function()
         pcall(function()
@@ -452,7 +444,7 @@ tpTab:CreateButton({
         end)
    end,
 })
-tpTab:CreateDropdown({
+mainTab:CreateDropdown({
    Name = "Select Spawn",
    List = spawns, -- Используем таблицу 'spawns', заполненную в начале
    Callback = function(a)
@@ -460,11 +452,8 @@ tpTab:CreateDropdown({
    end,
 })
 
--- Вкладка "Auto Farm"
--- ИСПРАВЛЕНО: УБРАНЫ ID ИКОНОК
-local farmTab = Window:CreateTab("Auto Farm")
-
-farmTab:CreateToggle({
+mainTab:CreateLabel("--- АВТО-ФАРМ (Auto Farm) ---")
+mainTab:CreateToggle({
    Name = "Auto Farm Card Levels",
    Default = false,
    Callback = function(lpr)
@@ -479,7 +468,7 @@ farmTab:CreateToggle({
         end 
    end,
 })
-farmTab:CreateToggle({
+mainTab:CreateToggle({
    Name = "Auto Breach 008",
    Default = false,
    Callback = function(ir)
@@ -493,7 +482,7 @@ farmTab:CreateToggle({
         end 
    end,
 })
-farmTab:CreateToggle({
+mainTab:CreateToggle({
    Name = "Auto Farm Escapes",
    Default = false,
    Callback = function(prt)
@@ -519,26 +508,22 @@ farmTab:CreateToggle({
    end,
 })
 
--- Вкладка "Combat"
--- ИСПРАВЛЕНО: УБРАНЫ ID ИКОНОК
-local combatTab = Window:CreateTab("Combat")
-
-combatTab:CreateLabel("General Combat")
-combatTab:CreateToggle({
+mainTab:CreateLabel("--- БОЕВЫЕ (Combat) ---")
+mainTab:CreateToggle({
    Name = "Mouse Kill Aura",
    Default = false,
    Callback = function(por)
         hub = por
    end,
 })
-combatTab:CreateKeybind({
+mainTab:CreateKeybind({
    Name = "Center Mouse",
    Key = Enum.KeyCode.F,
    Callback = function()
         mousemoveabs(workspace.CurrentCamera.ViewportSize.X / 2, workspace.CurrentCamera.ViewportSize.Y / 2)
    end,
 })
-combatTab:CreateToggle({
+mainTab:CreateToggle({
    Name = "Kill Player (from dropdown)",
    Default = false,
    Callback = function(OKLOL)
@@ -558,16 +543,15 @@ combatTab:CreateToggle({
         end 
    end,
 })
-
 -- Выпадающий список, который можно обновлять
-local playerDropdown = combatTab:CreateDropdown({
+local playerDropdown = mainTab:CreateDropdown({
    Name = "Select Player",
    List = playerss,
    Callback = function(xdlol)
         xdxd = xdlol 
    end,
 })
-combatTab:CreateButton({
+mainTab:CreateButton({
    Name = "Refresh Players",
    Callback = function()
         pcall(function()
@@ -581,8 +565,7 @@ combatTab:CreateButton({
         end)
    end,
 })
-
-combatTab:CreateToggle({
+mainTab:CreateToggle({
    Name = "Kill Aura (High Moderator Ban Chance)",
    Default = false,
    Callback = function(XD)
@@ -602,7 +585,7 @@ combatTab:CreateToggle({
         end 
    end,
 })
-combatTab:CreateToggle({
+mainTab:CreateToggle({
    Name = "Loop Contain Nearby SCPS (v-7)",
    Default = false,
    Callback = function(qot)
@@ -617,48 +600,48 @@ combatTab:CreateToggle({
    end,
 })
 
-combatTab:CreateLabel("ESP")
-combatTab:CreateButton({
+mainTab:CreateLabel("--- ESP ---")
+mainTab:CreateButton({
    Name = "Enable ESP",
    Callback = function() pcall(function() ESP:Toggle(true) end) end,
 })
-combatTab:CreateButton({
+mainTab:CreateButton({
    Name = "Enable Boxes",
    Callback = function() pcall(function() ESP.Boxes = true end) end,
 })
-combatTab:CreateButton({
+mainTab:CreateButton({
    Name = "Enable Names",
    Callback = function() pcall(function() ESP.Names = true end) end,
 })
-combatTab:CreateButton({
+mainTab:CreateButton({
    Name = "Disable ESP",
    Callback = function() pcall(function() ESP:Toggle(false) end) end,
 })
-combatTab:CreateButton({
+mainTab:CreateButton({
    Name = "Disable Boxes",
    Callback = function() pcall(function() ESP.Boxes = false end) end,
 })
-combatTab:CreateButton({
+mainTab:CreateButton({
    Name = "Disable Names",
    Callback = function() pcall(function() ESP.Names = false end) end,
 })
 
-combatTab:CreateLabel("Aimbot")
-combatTab:CreateToggle({
+mainTab:CreateLabel("--- AIMBOT ---")
+mainTab:CreateToggle({
    Name = "Enable Aimbot (Hold RMB)",
    Default = false,
    Callback = function(state)
         aimbot_Enabled = state
    end,
 })
-combatTab:CreateDropdown({
+mainTab:CreateDropdown({
    Name = "Aimbot Target",
    List = {"Head", "Torso"},
    Callback = function(partName)
         aimbot_TargetPart = partName
    end,
 })
-combatTab:CreateToggle({
+mainTab:CreateToggle({
    Name = "Aim at Allies",
    Default = false,
    Callback = function(state)
@@ -666,15 +649,15 @@ combatTab:CreateToggle({
    end,
 })
 
-combatTab:CreateLabel("Aimbot FOV")
-combatTab:CreateToggle({
+mainTab:CreateLabel("--- AIMBOT FOV ---")
+mainTab:CreateToggle({
    Name = "Show FOV Circle",
    Default = false,
    Callback = function(state)
         aimbot_ShowFov = state
    end,
 })
-combatTab:CreateInput({
+mainTab:CreateInput({
    Name = "FOV Radius",
    PlaceholderText = "Default: 100",
    Callback = function(val)
@@ -688,12 +671,8 @@ combatTab:CreateInput({
 })
 
 
--- Вкладка "Misc"
--- ИСПРАВЛЕНО: УБРАНЫ ID ИКОНОК
-local miscTab = Window:CreateTab("Misc")
-
-miscTab:CreateLabel("LocalPlayer")
-miscTab:CreateToggle({
+mainTab:CreateLabel("--- ПРОЧЕЕ (Misc) ---")
+mainTab:CreateToggle({
    Name = "Toggle Walkspeed",
    Default = false,
    Callback = function(irut)
@@ -705,11 +684,10 @@ miscTab:CreateToggle({
         end 
    end,
 })
-miscTab:CreateInput({
+mainTab:CreateInput({
    Name = "WalkSpeed",
    PlaceholderText = "Enter speed (e.g. 50)",
    Callback = function(no)
-        -- Код для обхода защиты от Kavo
         pcall(function()
             local h = game.Players.LocalPlayer.Character.Humanoid
             local mt = getrawmetatable(game)
@@ -726,8 +704,7 @@ miscTab:CreateInput({
         end)
    end,
 })
-
-miscTab:CreateToggle({
+mainTab:CreateToggle({
    Name = "Toggle JumpPower",
    Default = false,
    Callback = function(ooga)
@@ -739,11 +716,10 @@ miscTab:CreateToggle({
         end 
    end,
 })
-miscTab:CreateInput({
+mainTab:CreateInput({
    Name = "JumpPower",
    PlaceholderText = "Enter power (e.g. 100)",
    Callback = function(fr)
-        -- Код для обхода защиты от Kavo
         pcall(function()
             local h = game.Players.LocalPlayer.Character.Humanoid
             local mt = getrawmetatable(game)
@@ -760,8 +736,7 @@ miscTab:CreateInput({
         end)
    end,
 })
-
-miscTab:CreateToggle({
+mainTab:CreateToggle({
    Name = "NoClip",
    Default = false,
    Callback = function(gfrt)
@@ -777,7 +752,7 @@ miscTab:CreateToggle({
         end 
    end,
 })
-miscTab:CreateButton({
+mainTab:CreateButton({
    Name = "Clip",
    Callback = function()
         pcall(function()
