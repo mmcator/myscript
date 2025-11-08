@@ -1,6 +1,6 @@
 --[[
     СКРИПТ ПОЛНОСТЬЮ ПЕРЕНЕСЕН НА RAYFIELD
-    Все функции (Aimbot, FOV, Альянсы, ТП и т.д.) сохранены.
+    ИСПРАВЛЕНА ОШИБКА С ЗАГРУЗКОЙ ВКЛАДОК (удалены ID иконок)
 ]]
 
 -- ================================================================= --
@@ -16,7 +16,7 @@ local Window = Rayfield:CreateWindow({
         Enabled = true,
         FileName = "SCPRP_Hub_Config"
     },
-    ToggleKey = Enum.KeyCode.K -- Вот твой бинд на 'K'. Теперь он должен работать.
+    ToggleKey = Enum.KeyCode.K -- Вот твой бинд на 'K'.
 })
 
 -- Глобальные переменные из старого скрипта
@@ -223,17 +223,23 @@ end)
 
 -- Списки (таблицы)
 local spawns = {} 
-for i,v in ipairs(game.Workspace.Spawns:GetChildren()) do 
-    if not table.find(spawns, v.Name) then 
-        table.insert(spawns, v.Name)
-    end 
-end
+pcall(function()
+    for i,v in ipairs(game.Workspace.Spawns:GetChildren()) do 
+        if not table.find(spawns, v.Name) then 
+            table.insert(spawns, v.Name)
+        end 
+    end
+end)
+
 local playerss = {} 
-for i,v in ipairs(game.Players:GetChildren()) do 
-    if not table.find(playerss, v.Name) then 
-        table.insert(playerss, v.Name)
-    end 
-end
+pcall(function()
+    for i,v in ipairs(game.Players:GetChildren()) do 
+        if not table.find(playerss, v.Name) then 
+            table.insert(playerss, v.Name)
+        end 
+    end
+end)
+
 
 -- New Instances (для авто-фарма)
 pcall(function()
@@ -267,7 +273,8 @@ end)
 -- ================================================================= --
 
 -- Вкладка "Main"
-local mainTab = Window:CreateTab("Main", 4483362458)
+-- ИСПРАВЛЕНО: УБРАНЫ ID ИКОНОК
+local mainTab = Window:CreateTab("Main")
 
 mainTab:CreateButton({
    Name = "Hide Menu (K)",
@@ -345,7 +352,8 @@ mainTab:CreateButton({
 })
 
 -- Вкладка "Teleports"
-local tpTab = Window:CreateTab("Teleports", 5451833534)
+-- ИСПРАВЛЕНО: УБРАНЫ ID ИКОНОК
+local tpTab = Window:CreateTab("Teleports")
 
 tpTab:CreateLabel("Area TP")
 tpTab:CreateButton({
@@ -453,7 +461,8 @@ tpTab:CreateDropdown({
 })
 
 -- Вкладка "Auto Farm"
-local farmTab = Window:CreateTab("Auto Farm", 4887839446)
+-- ИСПРАВЛЕНО: УБРАНЫ ID ИКОНОК
+local farmTab = Window:CreateTab("Auto Farm")
 
 farmTab:CreateToggle({
    Name = "Auto Farm Card Levels",
@@ -511,7 +520,8 @@ farmTab:CreateToggle({
 })
 
 -- Вкладка "Combat"
-local combatTab = Window:CreateTab("Combat", 5012502652)
+-- ИСПРАВЛЕНО: УБРАНЫ ID ИКОНОК
+local combatTab = Window:CreateTab("Combat")
 
 combatTab:CreateLabel("General Combat")
 combatTab:CreateToggle({
@@ -610,27 +620,27 @@ combatTab:CreateToggle({
 combatTab:CreateLabel("ESP")
 combatTab:CreateButton({
    Name = "Enable ESP",
-   Callback = function() ESP:Toggle(true) end,
+   Callback = function() pcall(function() ESP:Toggle(true) end) end,
 })
 combatTab:CreateButton({
    Name = "Enable Boxes",
-   Callback = function() ESP.Boxes = true end,
+   Callback = function() pcall(function() ESP.Boxes = true end) end,
 })
 combatTab:CreateButton({
    Name = "Enable Names",
-   Callback = function() ESP.Names = true end,
+   Callback = function() pcall(function() ESP.Names = true end) end,
 })
 combatTab:CreateButton({
    Name = "Disable ESP",
-   Callback = function() ESP:Toggle(false) end,
+   Callback = function() pcall(function() ESP:Toggle(false) end) end,
 })
 combatTab:CreateButton({
    Name = "Disable Boxes",
-   Callback = function() ESP.Boxes = false end,
+   Callback = function() pcall(function() ESP.Boxes = false end) end,
 })
 combatTab:CreateButton({
    Name = "Disable Names",
-   Callback = function() ESP.Names = false end,
+   Callback = function() pcall(function() ESP.Names = false end) end,
 })
 
 combatTab:CreateLabel("Aimbot")
@@ -679,7 +689,8 @@ combatTab:CreateInput({
 
 
 -- Вкладка "Misc"
-local miscTab = Window:CreateTab("Misc", 4832103340)
+-- ИСПРАВЛЕНО: УБРАНЫ ID ИКОНОК
+local miscTab = Window:CreateTab("Misc")
 
 miscTab:CreateLabel("LocalPlayer")
 miscTab:CreateToggle({
@@ -699,18 +710,20 @@ miscTab:CreateInput({
    PlaceholderText = "Enter speed (e.g. 50)",
    Callback = function(no)
         -- Код для обхода защиты от Kavo
-        local h = game.Players.LocalPlayer.Character.Humanoid
-        local mt = getrawmetatable(game)
-        setreadonly(mt, false)
-        local scp = mt.__index
-        mt.__index = newcclosure(function(r, p)
-        if r == h and p == "WalkSpeed" then
-        return 16
-        end
-        return scp(r, p)
+        pcall(function()
+            local h = game.Players.LocalPlayer.Character.Humanoid
+            local mt = getrawmetatable(game)
+            setreadonly(mt, false)
+            local scp = mt.__index
+            mt.__index = newcclosure(function(r, p)
+            if r == h and p == "WalkSpeed" then
+            return 16
+            end
+            return scp(r, p)
+            end)
+            setreadonly(mt, true)
+            pro = no
         end)
-        setreadonly(mt, true)
-        pro = no
    end,
 })
 
@@ -731,18 +744,20 @@ miscTab:CreateInput({
    PlaceholderText = "Enter power (e.g. 100)",
    Callback = function(fr)
         -- Код для обхода защиты от Kavo
-        local h = game.Players.LocalPlayer.Character.Humanoid
-        local mt = getrawmetatable(game)
-        setreadonly(mt, false)
-        local scp = mt.__index
-        mt.__index = newcclosure(function(r, p)
-        if r == h and p == "JumpPower" then
-        return 50
-        end
-        return scp(r, p)
+        pcall(function()
+            local h = game.Players.LocalPlayer.Character.Humanoid
+            local mt = getrawmetatable(game)
+            setreadonly(mt, false)
+            local scp = mt.__index
+            mt.__index = newcclosure(function(r, p)
+            if r == h and p == "JumpPower" then
+            return 50
+            end
+            return scp(r, p)
+            end)
+            setreadonly(mt, true)
+            prop = fr
         end)
-        setreadonly(mt, true)
-        prop = fr
    end,
 })
 
@@ -830,4 +845,9 @@ game:GetService("RunService").RenderStepped:Connect(function()
         end)
     end
     
+end)
+
+-- Загрузка сохраненной конфигурации (если есть)
+pcall(function()
+    Rayfield:LoadConfiguration()
 end)
