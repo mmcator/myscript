@@ -1,6 +1,6 @@
 --[[
     СКРИПТ ПОЛНОСТЬЮ ПЕРЕНЕСЕН НА RAYFIELD
-    ИСПРАВЛЕНО: Все функции объединены во вкладке "Main",
+    ИСПРАВЛЕНО: Все функции ОБЪЕДИНЕНЫ во вкладке "Main",
     чтобы избежать ошибок загрузки других вкладок.
 ]]
 
@@ -30,6 +30,22 @@ local ticket = 0
 local timeHeld = 0
 local isHolding = false
 local RunService = game:GetService("RunService")
+local ESP, fovCircle
+
+-- ДОБАВЛЕНЫ PCALL ДЛЯ БЕЗОПАСНОЙ ЗАГРУЗКИ
+pcall(function()
+    ESP = loadstring(game:HttpGet("https://kiriot22.com/releases/ESP.lua"))()
+end)
+pcall(function()
+    fovCircle = Drawing.new("Circle")
+    fovCircle.Visible = false
+    fovCircle.Radius = 100
+    fovCircle.Color = Color3.fromRGB(255, 255, 255)
+    fovCircle.Thickness = 1
+    fovCircle.Filled = false
+    fovCircle.Transparency = 1
+end)
+
 
 -- ТАБЛИЦЫ "АЛЬЯНСОВ"
 local foundationKeys = {
@@ -44,17 +60,8 @@ local chaosKeys = {
 local aimbot_Enabled = false
 local aimbot_TargetPart = "Head"
 local aimbot_AimAtAllies = false 
-
--- ПЕРЕМЕННЫЕ ДЛЯ FOV
 local aimbot_ShowFov = false
 local aimbot_FovSize = 100
-local fovCircle = Drawing.new("Circle")
-fovCircle.Visible = false
-fovCircle.Radius = aimbot_FovSize
-fovCircle.Color = Color3.fromRGB(255, 255, 255)
-fovCircle.Thickness = 1
-fovCircle.Filled = false
-fovCircle.Transparency = 1
 
 -- ================================================================= --
 -- 2. ВСЕ ФУНКЦИИ ИЗ СТАРОГО СКРИПTA (ЛОГИКА)
@@ -273,7 +280,7 @@ end)
 -- 3. СОЗДАНИЕ ОДНОЙ ВКЛАДКИ "MAIN"
 -- ================================================================= --
 
-local mainTab = Window:CreateTab("Main")
+local mainTab = Window:CreateTab("Main") -- <-- ЕДИНСТВЕННАЯ ВКЛАДКА
 
 mainTab:CreateLabel("--- ОСНОВНЫЕ ФУНКЦИИ ---")
 mainTab:CreateButton({
@@ -603,27 +610,27 @@ mainTab:CreateToggle({
 mainTab:CreateLabel("--- ESP ---")
 mainTab:CreateButton({
    Name = "Enable ESP",
-   Callback = function() pcall(function() ESP:Toggle(true) end) end,
+   Callback = function() pcall(function() if ESP then ESP:Toggle(true) end end) end,
 })
 mainTab:CreateButton({
    Name = "Enable Boxes",
-   Callback = function() pcall(function() ESP.Boxes = true end) end,
+   Callback = function() pcall(function() if ESP then ESP.Boxes = true end end) end,
 })
 mainTab:CreateButton({
    Name = "Enable Names",
-   Callback = function() pcall(function() ESP.Names = true end) end,
+   Callback = function() pcall(function() if ESP then ESP.Names = true end end) end,
 })
 mainTab:CreateButton({
    Name = "Disable ESP",
-   Callback = function() pcall(function() ESP:Toggle(false) end) end,
+   Callback = function() pcall(function() if ESP then ESP:Toggle(false) end end) end,
 })
 mainTab:CreateButton({
    Name = "Disable Boxes",
-   Callback = function() pcall(function() ESP.Boxes = false end) end,
+   Callback = function() pcall(function() if ESP then ESP.Boxes = false end end) end,
 })
 mainTab:CreateButton({
    Name = "Disable Names",
-   Callback = function() pcall(function() ESP.Names = false end) end,
+   Callback = function() pcall(function() if ESP then ESP.Names = false end end) end,
 })
 
 mainTab:CreateLabel("--- AIMBOT ---")
@@ -784,13 +791,18 @@ game:GetService("RunService").RenderStepped:Connect(function()
     local equippedTool = plr.Character and plr.Character:FindFirstChildOfClass("Tool")
     
     -- ОБНОВЛЕНИЕ ДЛЯ КРУГА FOV
-    if aimbot_ShowFov then
-        fovCircle.Radius = aimbot_FovSize 
-        fovCircle.Position = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
-        fovCircle.Visible = true
-    else
-        fovCircle.Visible = false
-    end
+    pcall(function()
+        if fovCircle then
+            if aimbot_ShowFov then
+                fovCircle.Radius = aimbot_FovSize 
+                fovCircle.Position = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
+                fovCircle.Visible = true
+            else
+                fovCircle.Visible = false
+            end
+        end
+    end)
+
 
     -- Mouse Kill Aura
     if hub and isHolding and equippedTool and task.wait(.04) then
