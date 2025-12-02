@@ -1,0 +1,845 @@
+--[[
+    СКРИПТ ПОЛНОСТЬЮ ПЕРЕНЕСЕН НА RAYFIELD
+    ИСПРАВЛЕНО: Добавлена 5-секундная задержка ПЕРЕД созданием UI,
+    чтобы игра успела загрузить спавны и игроков.
+    Это должно исправить ошибку с "пустым" списком.
+]]
+
+-- ================================================================= --
+-- 1. ИНИЦИАЛИЗАЦИЯ RAYFIELD И ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
+-- ================================================================= --
+
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+local Window = Rayfield:CreateWindow({
+    Name = "SCP: RP Hub (by Novaz#5792)",
+    LoadingTitle = "Ждем загрузки игры... (5 сек)",
+    LoadingSubtitle = "by Novaz & Gemini",
+    ConfigurationSaving = {
+        Enabled = true,
+        FileName = "SCPRP_Hub_Config"
+    },
+    ToggleKey = Enum.KeyCode.K -- Бинд на 'K'.
+})
+
+-- Глобальные переменные из старого скрипта
+local plr = game.Players.LocalPlayer
+local mouse = plr:GetMouse()
+local camera = game.Workspace.CurrentCamera
+local uis = game:GetService("UserInputService")
+local userInput = game:GetService("UserInputService")
+local ticket = 0
+local timeHeld = 0
+local isHolding = false
+local RunService = game:GetService("RunService")
+local ESP, fovCircle
+
+-- ДОБАВЛЕНЫ PCALL ДЛЯ БЕЗОПАСНОЙ ЗАГРУЗКИ
+pcall(function()
+    ESP = loadstring(game:HttpGet("https://kiriot22.com/releases/ESP.lua"))()
+end)
+pcall(function()
+    fovCircle = Drawing.new("Circle")
+    fovCircle.Visible = false
+    fovCircle.Radius = 100
+    fovCircle.Color = Color3.fromRGB(255, 255, 255)
+    fovCircle.Thickness = 1
+    fovCircle.Filled = false
+    fovCircle.Transparency = 1
+end)
+
+
+-- ТАБЛИЦЫ "АЛЬЯНСОВ"
+local foundationKeys = {
+    "Security", "Scientific", "Mobile", "Internal", "Rapid", "Medical",
+    "Intelligence", "Administrative"
+}
+local chaosKeys = {
+    "Class - D", "Chaos Insurgency", "Class D"
+}
+
+-- ПЕРЕМЕННЫЕ ДЛЯ АИМБОТА
+local aimbot_Enabled = false
+local aimbot_TargetPart = "Head" -- По умолчанию целимся в голову
+local aimbot_AimAtAllies = false 
+local aimbot_ShowFov = false
+local aimbot_FovSize = 100
+
+-- ================================================================= --
+-- 2. ВСЕ ФУНКЦИИ ИЗ СТАРОГО СКРИПTA (ЛОГИКА)
+-- ================================================================= --
+
+local function getTeamAlliance(teamName)
+    if not teamName then return "Neutral" end
+    for _, key in ipairs(foundationKeys) do
+        if string.find(teamName, key, 1, true) then
+            return "Foundation"
+        end
+    end
+    for _, key in ipairs(chaosKeys) do
+        if string.find(teamName, key, 1, true) then
+            return "Chaos"
+        end
+    end
+    return "Neutral"
+end
+
+local function isEnemy(targetPlayer)
+    if not targetPlayer or targetPlayer == plr or not targetPlayer.Team or not plr.Team then
+        return false
+    end
+    if aimbot_AimAtAllies == true then
+        return true 
+    end
+    local myAlliance = getTeamAlliance(plr.Team.Name)
+    local targetAlliance = getTeamAlliance(targetPlayer.Team.Name)
+    if myAlliance == "Neutral" or targetAlliance == "Neutral" then
+        return plr.Team.Name ~= targetPlayer.Team.Name
+    end
+    return myAlliance ~= targetAlliance
+end
+
+local function GetClosestPlayer()
+    local target = nil
+    local distance = math.huge
+    for i,v in next, game.Players:GetPlayers() do
+        if v and v ~= plr and isEnemy(v) and v.Character and v.Character:FindFirstChildOfClass('Humanoid') and v.Character:FindFirstChildOfClass('Humanoid').RootPart then
+            local plrdist = plr:DistanceFromCharacter(v.Character:FindFirstChildOfClass('Humanoid').RootPart.CFrame.p)
+            if plrdist < distance then
+                target = v
+                distance = plrdist
+            end
+        end
+    end
+    return target
+end
+
+local function ClosestPlayerToMouse()
+    local target = nil
+    local dist = math.huge
+    for _, v in pairs(game.Players:GetPlayers()) do
+        if v.Name ~= plr.Name then
+            if isEnemy(v) 
+                and v.Character
+                and v.Character:FindFirstChild("Humanoid")
+                and v.Character.Humanoid.Health ~= 0
+                and v.Character:FindFirstChild("HumanoidRootPart")
+            then
+                local screenpoint, onScreen = camera:WorldToScreenPoint(v.Character.HumanoidRootPart.Position)
+                if onScreen then
+                    local check = (Vector2.new(mouse.X, mouse.Y) - Vector2.new(screenpoint.X, screenpoint.Y)).magnitude
+                    if check < dist then
+                        target = v
+                        dist = check
+                    end
+                end
+            end
+        end
+    end
+    return target
+end
+
+local function aimbot_getClosestPlayer()
+    local closestPlayer = nil
+    local closest_2D_Dist = aimbot_FovSize 
+
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+    raycastParams.FilterDescendantsInstances = {plr.Character} 
+    local crosshairPos = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
+
+    for _, target in pairs(game.Players:GetPlayers()) do
+        if target ~= plr and isEnemy(target) and target.Character and target.Character:FindFirstChild("HumanoidRootPart") and target.Character:FindFirstChildOfClass('Humanoid') and target.Character:FindFirstChildOfClass('Humanoid').Health > 0 then
+            
+            local targetPart = target.Character:FindFirstChild(aimbot_TargetPart) or target.Character.HumanoidRootPart
+            local screenPos, onScreen = camera:WorldToScreenPoint(targetPart.Position)
+            
+            if onScreen then
+                local dist2D = (crosshairPos - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
+                
+                if dist2D <= aimbot_FovSize then
+                    local origin = camera.CFrame.Position
+                    local direction = (targetPart.Position - origin) 
+                    local rayResult = workspace:Raycast(origin, direction, raycastParams)
+                    
+                    if (not rayResult or rayResult.Instance:IsDescendantOf(target.Character)) then
+                        if dist2D < closest_2D_Dist then
+                            closest_2D_Dist = dist2D
+                            closestPlayer = target
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return closestPlayer
+end
+
+local function aimbot_aimAt(target)
+    local targetPart = target.Character:FindFirstChild(aimbot_TargetPart)
+    if not targetPart then
+        targetPart = target.Character:FindFirstChild("HumanoidRootPart")
+    end
+
+    if target and targetPart then
+        camera.CFrame = CFrame.new(camera.CFrame.Position, targetPart.Position)
+    end
+end
+
+-- Holding MB2 Check (kalas)
+function rightMouseButtonHeld()
+    isHolding = true
+end
+
+function rightMouseButtonReleased()
+    if not isHolding then
+        return
+    end
+    isHolding = false
+end
+
+-- Обработка нажатий (только для RMB, 'K' теперь в Rayfield)
+userInput.InputBegan:connect(function(input, gameProcessed)
+    if gameProcessed then
+        return
+    end
+    
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then
+        ticket = ticket + 1
+        local currentTicket = ticket
+
+        if timeHeld > 0 then
+            task.delay(timeHeld, function()
+                if ticket == currentTicket then
+                    rightMouseButtonHeld()
+                end
+            end)
+        else
+            rightMouseButtonHeld()
+        end
+    end
+end)
+
+userInput.InputEnded:connect(function(input, gameProcessed)
+    if gameProcessed then
+        return
+    end
+
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then
+        ticket = ticket + 1
+        rightMouseButtonReleased()
+    end
+end)
+
+-- New Instances (для авто-фарма)
+pcall(function()
+    local part = Instance.new("Part")
+    part.Anchored = true
+    part.Size = Vector3.new(50,1,50)
+    part.CFrame = CFrame.new(10000, 10000, 10000)
+    part.Parent = game.Workspace
+
+    local part = Instance.new("Part")
+    part.Anchored = true
+    part.Size = Vector3.new(50,1,50)
+    part.CFrame = CFrame.new(-11, 33, -173)
+    part.Parent = game.Workspace
+
+    local part = Instance.new("Part")
+    part.Anchored = true
+    part.Size = Vector3.new(50,1,50)
+    part.CFrame = game.Workspace.Spawns:FindFirstChild("Chaos Insurgency").CFrame
+    part.Parent = game.Workspace
+
+    local part = Instance.new("Part")
+    part.Anchored = true
+    part.Size = Vector3.new(50,1,50)
+    part.CFrame = CFrame.new(233, 13, 511)
+    part.Parent = game.Workspace
+end)
+
+-- ================================================================= --
+-- 3. СОЗДАНИЕ ОДНОЙ ВКЛАДКИ "MAIN"
+-- ================================================================= --
+
+-- ИСПРАВЛЕНО: ЖДЕМ 5 СЕКУНД, ЧТОБЫ ИГРА ПРОГРУЗИЛАСЬ
+task.wait(5) 
+
+-- Теперь, когда игра загружена, безопасно собираем списки
+local spawns = {} 
+pcall(function()
+    for i,v in ipairs(game.Workspace.Spawns:GetChildren()) do 
+        if not table.find(spawns, v.Name) then 
+            table.insert(spawns, v.Name)
+        end 
+    end
+    if #spawns == 0 then table.insert(spawns, "[Спавны не найдены]") end
+end)
+
+local playerss = {} 
+pcall(function()
+    for i,v in ipairs(game.Players:GetChildren()) do 
+        if not table.find(playerss, v.Name) then 
+            table.insert(playerss, v.Name)
+        end 
+    end
+    if #playerss == 0 then table.insert(playerss, "[Игроки не найдены]") end
+end)
+
+
+-- Теперь создаем UI, когда все списки готовы
+local mainTab = Window:CreateTab("Main") -- <-- ЕДИНСТВЕННАЯ ВКЛАДКА
+
+mainTab:CreateLabel("--- ОСНОВНЫЕ ФУНКЦИИ ---")
+mainTab:CreateButton({
+   Name = "Hide Menu (K)",
+   Callback = function()
+        Window:Toggle() -- "Родная" функция Rayfield для скрытия
+   end,
+})
+mainTab:CreateButton({
+   Name = "TP To Nuke Bunker (Hidden)",
+   Callback = function()
+        pcall(function()
+        plr.Character.HumanoidRootPart.CFrame = CFrame.new(233, 15, 511)
+        end)
+   end,
+})
+mainTab:CreateButton({
+   Name = "Breach 008",
+   Callback = function()
+        pcall(function()
+        plr.Character.HumanoidRootPart.CFrame = CFrame.new(233, 17, 511)
+        wait(1)
+        fireproximityprompt(game:GetService("Workspace")["Sector 3"].ModelCI008["Meshes/Chaos Insurgency Hack Device_Cylinder"].CIHackDevicePrompt)
+        end)
+   end,
+})
+mainTab:CreateButton({
+   Name = "Breach 096",
+   Callback = function()
+        pcall(function()
+        plr.Character.HumanoidRootPart.CFrame = CFrame.new(708.509, 40.35, -159.07)
+        wait(12)
+        plr.Character.HumanoidRootPart.CFrame = CFrame.new(-171.968, 40.35, 503.986)
+        end)
+   end,
+})
+mainTab:CreateButton({
+   Name = "Sabotage Transformer",
+   Callback = function()
+        pcall(function()
+        plr.Character.HumanoidRootPart.CFrame = CFrame.new(-102, 34, -176)
+        wait(1)
+        fireproximityprompt(game.Workspace["Sector 2"].SectionB:FindFirstChild("TransformerC4").ClickPart.ProximityPrompt)
+        end)
+   end,
+})
+mainTab:CreateButton({
+   Name = "Hack Control Room",
+   Callback = function()
+        pcall(function()
+        plr.Character.HumanoidRootPart.CFrame = CFrame.new(83, 37, 192)
+        wait(1)
+        fireproximityprompt(game:GetService("Workspace")["Sector 2"].SectionA.ModelCI["Meshes/Chaos Insurgency Hack Device_Cylinder"].CIHackDevicePrompt)
+        end)
+   end,
+})
+mainTab:CreateButton({
+   Name = "Escape As CD",
+   Callback = function()
+        pcall(function()
+        plr.Character.HumanoidRootPart.CFrame = CFrame.new(7.023, 36.498, -170.876)
+        wait(5)
+        plr.Character.HumanoidRootPart.CFrame = CFrame.new(-52.511, 87.748, 236.672)
+        end)
+   end,
+})
+mainTab:CreateButton({
+   Name = "Authorize Nearby Players (Equip It)",
+   Callback = function()
+        pcall(function()
+        for i,v in pairs(game:GetService("Players"):GetChildren()) do 
+        game:GetService("ReplicatedStorage").Remotes.Authorise:FireServer(v)
+        end 
+        end) 
+   end,
+})
+
+mainTab:CreateLabel("--- ТЕЛЕПОРТЫ (Teleports) ---")
+mainTab:CreateButton({
+   Name = "Tp To Selected Area",
+   Callback = function()
+        pcall(function()
+        if d == "Sector 3" then 
+        plr.Character.HumanoidRootPart.CFrame = CFrame.new(491, 42, 150)
+        elseif d == "Bunker" then 
+        plr.Character.HumanoidRootPart.CFrame = CFrame.new(228, 42, 438)
+        elseif d == "Class D Viewing" then 
+        plr.Character.HumanoidRootPart.CFrame = CFrame.new(21, 62, 467)
+        elseif d == "Class D Containment" then 
+        plr.Character.HumanoidRootPart.CFrame = CFrame.new(26, 45, 519)
+        elseif d == "Control Room" then 
+        plr.Character.HumanoidRootPart.CFrame = CFrame.new(67, 42, 217)
+        elseif d == "Sector 1" then 
+        plr.Character.HumanoidRootPart.CFrame = CFrame.new(-358, 42, 56)
+        elseif d == "Shooting Range" then 
+        plr.Character.HumanoidRootPart.CFrame = CFrame.new(-433, 32, 3)
+        elseif d == "Heli Pad" then 
+        plr.Character.HumanoidRootPart.CFrame = CFrame.new(-573, 52, 436)
+        elseif d == "Transformer" then 
+        plr.Character.HumanoidRootPart.CFrame = CFrame.new(-95, 42, -148)
+        elseif d == "Sector 2-1" then 
+        plr.Character.HumanoidRootPart.CFrame = CFrame.new(-313, 42, 57)
+        elseif d == "Sector 2-2" then 
+        plr.Character.HumanoidRootPart.CFrame = CFrame.new(290, 42, 151)
+        end
+        end)
+   end,
+})
+mainTab:CreateDropdown({
+   Name = "Select Area",
+   List = {"Sector 1", "Sector 2-1", "Sector 2-2", "Sector 3", "Bunker", "Control Room", "Transformer", "Class D Containment", "Class D Viewing", "Heli Pad", "Shooting Range"},
+   Callback = function(c)
+        d = c 
+   end,
+})
+mainTab:CreateButton({
+   Name = "Tp To SCP Containment",
+   Callback = function()
+        pcall(function()
+        if r == "008" then 
+        plr.Character.HumanoidRootPart.CFrame = CFrame.new(538, 40, 388)
+        elseif r == "008 Deconstructor" then 
+        plr.Character.HumanoidRootPart.CFrame = CFrame.new(498, 40, 298)
+        elseif r == "049" then 
+        plr.Character.HumanoidRootPart.CFrame = CFrame.new(605, 40, 53)
+        elseif r == "966" then 
+        plr.Character.HumanoidRootPart.CFrame = CFrame.new(653, 40, 48)
+        elseif r == "457" then 
+        plr.Character.HumanoidRootPart.CFrame = CFrame.new(607, 40, -43)
+        elseif r == "096" then 
+        plr.Character.HumanoidRootPart.CFrame = CFrame.new(662, 40, -121)
+        elseif r == "173" then 
+        plr.Character.HumanoidRootPart.CFrame = CFrame.new(204, 54, 158)
+        elseif r == "002" then 
+        plr.Character.HumanoidRootPart.CFrame = CFrame.new(-82, 40, 143)
+        elseif r == "2950" then 
+        plr.Character.HumanoidRootPart.CFrame = CFrame.new(-213, 40, 190)
+        elseif r == "131" then 
+        plr.Character.HumanoidRootPart.CFrame = CFrame.new(-213, 40, 301)
+        elseif r == "066" then 
+        plr.Character.HumanoidRootPart.CFrame = CFrame.new(-215, 40, -39)
+        elseif r == "999" then 
+        plr.Character.HumanoidRootPart.CFrame = CFrame.new(-282, 40, 27)
+        elseif r == "409" then 
+        plr.Character.HumanoidRootPart.CFrame = CFrame.new(-87, 40, -65)
+        elseif r == "1299" then 
+        plr.Character.HumanoidRootPart.CFrame = CFrame.new(141, 40, -67)
+        elseif r == "1025" then 
+        plr.Character.HumanoidRootPart.CFrame = CFrame.new(256, 40, -52)
+        elseif r == "023" then 
+        plr.Character.HumanoidRootPart.CFrame = CFrame.new(258, 40, 248)
+        end 
+        end)
+   end,
+})
+mainTab:CreateDropdown({
+   Name = "Select SCP Containment",
+   List = {"008", "096", "049", "173", "966", "457", "999", "023", "008 Deconstructor", "002", "2950", "131", "066", "409", "1299", "1025"},
+   Callback = function(l)
+        r = l
+   end,
+})
+mainTab:CreateButton({
+   Name = "Tp To Selected Spawn",
+   Callback = function()
+        pcall(function()
+        plr.Character.HumanoidRootPart.CFrame = game.Workspace.Spawns:FindFirstChild(b).CFrame + Vector3.new(0, 10, 0)
+        end)
+   end,
+})
+-- ИСПРАВЛЕНО: Создаем Dropdown с УЖЕ ЗАПОЛНЕННЫМ списком
+mainTab:CreateDropdown({
+   Name = "Select Spawn",
+   List = spawns, -- Используем список 'spawns', который мы заполнили после task.wait()
+   Callback = function(a)
+        b = a 
+   end,
+})
+
+
+mainTab:CreateLabel("--- АВТО-ФАРМ (Auto Farm) ---")
+mainTab:CreateToggle({
+   Name = "Auto Farm Card Levels",
+   Default = false,
+   Callback = function(lpr)
+        lpc = lpr 
+        while lpc and task.wait() do 
+        pcall(function()
+        plr.Character.HumanoidRootPart.CFrame = CFrame.new(10000, 10003.497, 10000)
+        wait(.1)
+        game:GetService("TweenService"):Create(plr.Character.HumanoidRootPart, TweenInfo.new(5, Enum.EasingStyle.Linear), {CFrame = CFrame.new(10010, 10003.497, 10010)}):Play()
+        wait(5)
+        end) 
+        end 
+   end,
+})
+mainTab:CreateToggle({
+   Name = "Auto Breach 008",
+   Default = false,
+   Callback = function(ir)
+        it = ir 
+        while it and task.wait(1) do 
+        pcall(function()
+        plr.Character.HumanoidRootPart.CFrame = CFrame.new(530, 41, 388)
+        wait(1)
+        fireproximityprompt(game:GetService("Workspace")["Sector 3"].ModelCI008["Meshes/Chaos Insurgency Hack Device_Cylinder"].CIHackDevicePrompt)
+        end) 
+        end 
+   end,
+})
+mainTab:CreateToggle({
+   Name = "Auto Farm Escapes",
+   Default = false,
+   Callback = function(prt)
+        poit = prt 
+        while poit and task.wait(5) do 
+        pcall(function()
+        plr.Character.HumanoidRootPart.CFrame = CFrame.new(7.023, 36.498, -170.876)
+        wait(5)
+        plr.Character.HumanoidRootPart.CFrame = CFrame.new(-52.511, 87.748, 236.672)
+        wait(3)
+        local args = {
+            [1] = {
+                [1] = "Class - D",
+                [2] = 0,
+                [3] = false
+            },
+            [2] = false,
+            [3] = false
+        }
+        game:GetService("ReplicatedStorage").Remotes.Spawn:InvokeServer(unpack(args))
+        end) 
+        end 
+   end,
+})
+
+mainTab:CreateLabel("--- БОЕВЫЕ (Combat) ---")
+mainTab:CreateToggle({
+   Name = "Mouse Kill Aura",
+   Default = false,
+   Callback = function(por)
+        hub = por
+   end,
+})
+mainTab:CreateKeybind({
+   Name = "Center Mouse",
+   Key = Enum.KeyCode.F,
+   Callback = function()
+        mousemoveabs(workspace.CurrentCamera.ViewportSize.X / 2, workspace.CurrentCamera.ViewportSize.Y / 2)
+   end,
+})
+mainTab:CreateToggle({
+   Name = "Kill Player (from dropdown)",
+   Default = false,
+   Callback = function(OKLOL)
+        OKBOZO = OKLOL
+        while OKBOZO and task.wait() do 
+        pcall(function()
+        local args = {
+            [1] = {
+                [1] = game.Players[xdxd].Character.Head.Position.X,
+                [2] = game.Players[xdxd].Character.Head.Position.Y,
+                [3] = game.Players[xdxd].Character.Head.Position.Z
+            },
+            [2] = game.Players[xdxd].Character.Head
+        }
+        game:GetService("ReplicatedStorage").Remotes.ShootRemote:FireServer(unpack(args))
+        end)
+        end 
+   end,
+})
+-- ИСПРАВЛЕНО: Создаем Dropdown с УЖЕ ЗАПОЛНЕННЫМ списком
+mainTab:CreateDropdown({
+   Name = "Select Player",
+   List = playerss, -- Используем список 'playerss'
+   Callback = function(xdlol)
+        xdxd = xdlol 
+   end,
+})
+-- УБРАНА КНОПКА REFRESH (больше не нужна)
+
+mainTab:CreateToggle({
+   Name = "Kill Aura (High Moderator Ban Chance)",
+   Default = false,
+   Callback = function(XD)
+        LOL = XD 
+        while LOL and task.wait(.04) do 
+        pcall(function()
+        local args = {
+            [1] = {
+                [1] = GetClosestPlayer().Character.Head.Position.X,
+                [2] = GetClosestPlayer().Character.Head.Position.Y,
+                [3] = GetClosestPlayer().Character.Head.Position.Z
+            },
+            [2] = GetClosestPlayer().Character.Head
+        }
+        game:GetService("ReplicatedStorage").Remotes.ShootRemote:FireServer(unpack(args))
+        end) 
+        end 
+   end,
+})
+mainTab:CreateToggle({
+   Name = "Loop Contain Nearby SCPS (v-7)",
+   Default = false,
+   Callback = function(qot)
+        qor = qot 
+        while qor and task.wait() do 
+        pcall(function()
+        for i,v in pairs(game.Workspace.SCPs:GetChildren()) do 
+        game:GetService("ReplicatedStorage").Remotes.Update:FireServer(v)
+        end 
+        end)
+        end 
+   end,
+})
+
+mainTab:CreateLabel("--- ESP ---")
+mainTab:CreateButton({
+   Name = "Enable ESP",
+   Callback = function() pcall(function() if ESP then ESP:Toggle(true) end end) end,
+})
+mainTab:CreateButton({
+   Name = "Enable Boxes",
+   Callback = function() pcall(function() if ESP then ESP.Boxes = true end end) end,
+})
+mainTab:CreateButton({
+   Name = "Enable Names",
+   Callback = function() pcall(function() if ESP then ESP.Names = true end end) end,
+})
+mainTab:CreateButton({
+   Name = "Disable ESP",
+   Callback = function() pcall(function() if ESP then ESP:Toggle(false) end end) end,
+})
+mainTab:CreateButton({
+   Name = "Disable Boxes",
+   Callback = function() pcall(function() if ESP then ESP.Boxes = false end end) end,
+})
+mainTab:CreateButton({
+   Name = "Disable Names",
+   Callback = function() pcall(function() if ESP then ESP.Names = false end end) end,
+})
+
+mainTab:CreateLabel("--- AIMBOT ---")
+mainTab:CreateToggle({
+   Name = "Enable Aimbot (Hold RMB)",
+   Default = false,
+   Callback = function(state)
+        aimbot_Enabled = state
+   end,
+})
+-- Заменяем "Aimbot Target" Dropdown на две кнопки
+mainTab:CreateButton({
+   Name = "Set Aimbot Target: Head",
+   Callback = function() 
+        aimbot_TargetPart = "Head"
+        Rayfield:Notify("Aimbot", "Target set to Head", 5)
+   end,
+})
+mainTab:CreateButton({
+   Name = "Set Aimbot Target: Torso",
+   Callback = function() 
+        aimbot_TargetPart = "Torso"
+        Rayfield:Notify("Aimbot", "Target set to Torso", 5)
+   end,
+})
+mainTab:CreateToggle({
+   Name = "Aim at Allies",
+   Default = false,
+   Callback = function(state)
+        aimbot_AimAtAllies = state
+   end,
+})
+
+mainTab:CreateLabel("--- AIMBOT FOV ---")
+mainTab:CreateToggle({
+   Name = "Show FOV Circle",
+   Default = false,
+   Callback = function(state)
+        aimbot_ShowFov = state
+   end,
+})
+mainTab:CreateInput({
+   Name = "FOV Radius",
+   PlaceholderText = "Default: 100",
+   Callback = function(val)
+        local newSize = tonumber(val)
+        if newSize and newSize > 0 then
+            aimbot_FovSize = newSize
+        else
+            aimbot_FovSize = 100
+        end
+   end,
+})
+
+
+mainTab:CreateLabel("--- ПРОЧЕЕ (Misc) ---")
+mainTab:CreateToggle({
+   Name = "Toggle Walkspeed",
+   Default = false,
+   Callback = function(irut)
+        ortm = irut 
+        while ortm and task.wait() do
+        pcall(function()
+        plr.Character.Humanoid.WalkSpeed = pro 
+        end) 
+        end 
+   end,
+})
+mainTab:CreateInput({
+   Name = "WalkSpeed",
+   PlaceholderText = "Enter speed (e.g. 50)",
+   Callback = function(no)
+        pcall(function()
+            local h = game.Players.LocalPlayer.Character.Humanoid
+            local mt = getrawmetatable(game)
+            setreadonly(mt, false)
+            local scp = mt.__index
+            mt.__index = newcclosure(function(r, p)
+            if r == h and p == "WalkSpeed" then
+            return 16
+            end
+            return scp(r, p)
+            end)
+            setreadonly(mt, true)
+            pro = no
+        end)
+   end,
+})
+mainTab:CreateToggle({
+   Name = "Toggle JumpPower",
+   Default = false,
+   Callback = function(ooga)
+        booga = ooga
+        while booga and task.wait() do
+        pcall(function()
+        plr.Character.Humanoid.JumpPower = prop 
+        end) 
+        end 
+   end,
+})
+mainTab:CreateInput({
+   Name = "JumpPower",
+   PlaceholderText = "Enter power (e.g. 100)",
+   Callback = function(fr)
+        pcall(function()
+            local h = game.Players.LocalPlayer.Character.Humanoid
+            local mt = getrawmetatable(game)
+            setreadonly(mt, false)
+            local scp = mt.__index
+            mt.__index = newcclosure(function(r, p)
+            if r == h and p == "JumpPower" then
+            return 50
+            end
+            return scp(r, p)
+            end)
+            setreadonly(mt, true)
+            prop = fr
+        end)
+   end,
+})
+mainTab:CreateToggle({
+   Name = "NoClip",
+   Default = false,
+   Callback = function(gfrt)
+        lotp = gfrt
+        while lotp and task.wait() do 
+        pcall(function()
+        for i,v in pairs(plr.Character:GetDescendants()) do 
+            if v:IsA("BasePart") and v.CanCollide ~= false then
+                v.CanCollide = false
+            end 
+        end 
+        end)
+        end 
+   end,
+})
+mainTab:CreateButton({
+   Name = "Clip",
+   Callback = function()
+        pcall(function()
+        for i,v in pairs(plr.Character:GetDescendants()) do 
+            if v.Name == "HumanoidRootPart" and v.CanCollide == false then 
+                v.CanCollide = true
+            end 
+        end
+        end)
+   end,
+})
+
+
+-- ================================================================= --
+-- 4. ANTI-AFK И ГЛАВНЫЙ ЦИКЛ (RenderStepped)
+-- ================================================================= --
+
+-- Anti AFK 
+pcall(function()
+    for i,v in pairs(getconnections(game:GetService("Players").LocalPlayer.Idled)) do
+        v:Disable()
+    end
+end)
+
+-- ГЛАВНЫЙ ЦИКЛ (RenderStepped)
+game:GetService("RunService").RenderStepped:Connect(function()
+    
+    -- Проверка на наличие оружия в руках
+    local equippedTool = plr.Character and plr.Character:FindFirstChildOfClass("Tool")
+    
+    -- ОБНОВЛЕНИЕ ДЛЯ КРУГА FOV
+    pcall(function()
+        if fovCircle then
+            if aimbot_ShowFov then
+                fovCircle.Radius = aimbot_FovSize 
+                fovCircle.Position = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
+                fovCircle.Visible = true
+            else
+                fovCircle.Visible = false
+            end
+        end
+    end)
+
+
+    -- Mouse Kill Aura
+    if hub and isHolding and equippedTool and task.wait(.04) then
+        pcall(function()
+            local target = ClosestPlayerToMouse() 
+            if target then 
+                local args = {
+                    [1] = {
+                        [1] = target.Character.Head.Position.X,
+                        [2] = target.Character.Head.Position.Y,
+                        [3] = target.Character.Head.Position.Z
+                    },
+                    [2] = target.Character.Head
+                }
+                game:GetService("ReplicatedStorage").Remotes.ShootRemote:FireServer(unpack(args))
+            end
+        end)
+    end
+    
+    -- ЛОГИКА АИМБОТА
+    if aimbot_Enabled and isHolding and equippedTool then
+        pcall(function()
+            local target = aimbot_getClosestPlayer() 
+            if target then
+                aimbot_aimAt(target)
+            end
+        end)
+    end
+    
+end)
+
+-- Загрузка сохраненной конфигурации (если есть)
+pcall(function()
+    Rayfield:LoadConfiguration()
+end)
