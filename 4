@@ -1,469 +1,180 @@
---[[
-    СКРИПТ ПОЛНОСТЬЮ ПЕРЕНЕСЕН НА RAYFIELD
-    ИСПРАВЛЕНО: Добавлена 5-секундная задержка ПЕРЕД созданием UI,
-    чтобы игра успела загрузить спавны и игроков.
-    Это должно исправить ошибку с "пустым" списком.
-]]
-
--- ================================================================= --
--- 1. ИНИЦИАЛИЗАЦИЯ RAYFIELD И ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
--- ================================================================= --
-
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
 local Window = Rayfield:CreateWindow({
-    Name = "SCP: RP Hub (by Novaz#5792)",
-    LoadingTitle = "Ждем загрузки игры... (5 сек)",
-    LoadingSubtitle = "by Novaz & Gemini",
-    ConfigurationSaving = {
-        Enabled = true,
-        FileName = "SCPRP_Hub_Config"
-    },
-    ToggleKey = Enum.KeyCode.K -- Бинд на 'K'.
+   Name = "Aniphobia Hub",
+   LoadingTitle = "Загрузка...",
+   LoadingSubtitle = "NPC Aimbot + Noclip",
+   ConfigurationSaving = {
+      Enabled = true,
+      FileName = "Aniphobia_Hub_Config"
+   },
+   Discord = {
+      Enabled = false,
+   },
+   KeySystem = false,
+   ToggleKey = Enum.KeyCode.K -- Скрыть/Показать на K
 })
 
--- Глобальные переменные из старого скрипта
-local plr = game.Players.LocalPlayer
-local mouse = plr:GetMouse()
-local camera = game.Workspace.CurrentCamera
-local uis = game:GetService("UserInputService")
-local userInput = game:GetService("UserInputService")
-local ticket = 0
-local timeHeld = 0
-local isHolding = false
+-- ================================================================= --
+-- ПЕРЕМЕННЫЕ И СЕРВИСЫ
+-- ================================================================= --
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
-local ESP, fovCircle
+local UserInputService = game:GetService("UserInputService")
+local Camera = Workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
 
--- ДОБАВЛЕНЫ PCALL ДЛЯ БЕЗОПАСНОЙ ЗАГРУЗКИ
-pcall(function()
-    ESP = loadstring(game:HttpGet("https://kiriot22.com/releases/ESP.lua"))()
-end)
-pcall(function()
-    fovCircle = Drawing.new("Circle")
-    fovCircle.Visible = false
-    fovCircle.Radius = 100
-    fovCircle.Color = Color3.fromRGB(255, 255, 255)
-    fovCircle.Thickness = 1
-    fovCircle.Filled = false
-    fovCircle.Transparency = 1
-end)
+-- Настройки Аимбота
+local AimEnabled = false
+local AimFOV = 100
+local ShowFOV = false
+local TargetPart = "Head"
 
+-- Настройки Noclip
+local NoclipEnabled = false
 
--- ТАБЛИЦЫ "АЛЬЯНСОВ"
-local foundationKeys = {
-    "Security", "Scientific", "Mobile", "Internal", "Rapid", "Medical",
-    "Intelligence", "Administrative"
-}
-local chaosKeys = {
-    "Class - D", "Chaos Insurgency", "Class D"
-}
-
--- ПЕРЕМЕННЫЕ ДЛЯ АИМБОТА
-local aimbot_Enabled = false
-local aimbot_TargetPart = "Head" -- По умолчанию целимся в голову
-local aimbot_AimAtAllies = false 
-local aimbot_ShowFov = false
-local aimbot_FovSize = 100
+-- Рисуем круг FOV
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Color = Color3.fromRGB(255, 255, 255)
+FOVCircle.Thickness = 1
+FOVCircle.Filled = false
+FOVCircle.Transparency = 1
+FOVCircle.Visible = false
+FOVCircle.Radius = AimFOV
 
 -- ================================================================= --
--- 2. ВСЕ ФУНКЦИИ ИЗ СТАРОГО СКРИПTA (ЛОГИКА)
+-- ФУНКЦИИ
 -- ================================================================= --
 
-local function getTeamAlliance(teamName)
-    if not teamName then return "Neutral" end
-    for _, key in ipairs(foundationKeys) do
-        if string.find(teamName, key, 1, true) then
-            return "Foundation"
-        end
+-- Проверка: Игрок это или NPC?
+local function IsPlayer(model)
+    if Players:GetPlayerFromCharacter(model) then
+        return true -- Это игрок
     end
-    for _, key in ipairs(chaosKeys) do
-        if string.find(teamName, key, 1, true) then
-            return "Chaos"
-        end
-    end
-    return "Neutral"
+    return false -- Это NPC
 end
 
-local function isEnemy(targetPlayer)
-    if not targetPlayer or targetPlayer == plr or not targetPlayer.Team or not plr.Team then
-        return false
-    end
-    if aimbot_AimAtAllies == true then
-        return true 
-    end
-    local myAlliance = getTeamAlliance(plr.Team.Name)
-    local targetAlliance = getTeamAlliance(targetPlayer.Team.Name)
-    if myAlliance == "Neutral" or targetAlliance == "Neutral" then
-        return plr.Team.Name ~= targetPlayer.Team.Name
-    end
-    return myAlliance ~= targetAlliance
-end
+-- Поиск ближайшего NPC в радиусе FOV
+local function GetClosestNPC()
+    local ClosestTarget = nil
+    local ShortestDistance = AimFOV
+    local MousePos = UserInputService:GetMouseLocation()
 
-local function GetClosestPlayer()
-    local target = nil
-    local distance = math.huge
-    for i,v in next, game.Players:GetPlayers() do
-        if v and v ~= plr and isEnemy(v) and v.Character and v.Character:FindFirstChildOfClass('Humanoid') and v.Character:FindFirstChildOfClass('Humanoid').RootPart then
-            local plrdist = plr:DistanceFromCharacter(v.Character:FindFirstChildOfClass('Humanoid').RootPart.CFrame.p)
-            if plrdist < distance then
-                target = v
-                distance = plrdist
-            end
-        end
-    end
-    return target
-end
-
-local function ClosestPlayerToMouse()
-    local target = nil
-    local dist = math.huge
-    for _, v in pairs(game.Players:GetPlayers()) do
-        if v.Name ~= plr.Name then
-            if isEnemy(v) 
-                and v.Character
-                and v.Character:FindFirstChild("Humanoid")
-                and v.Character.Humanoid.Health ~= 0
-                and v.Character:FindFirstChild("HumanoidRootPart")
-            then
-                local screenpoint, onScreen = camera:WorldToScreenPoint(v.Character.HumanoidRootPart.Position)
-                if onScreen then
-                    local check = (Vector2.new(mouse.X, mouse.Y) - Vector2.new(screenpoint.X, screenpoint.Y)).magnitude
-                    if check < dist then
-                        target = v
-                        dist = check
-                    end
-                end
-            end
-        end
-    end
-    return target
-end
-
-local function aimbot_getClosestPlayer()
-    local closestPlayer = nil
-    local closest_2D_Dist = aimbot_FovSize 
-
-    local raycastParams = RaycastParams.new()
-    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-    raycastParams.FilterDescendantsInstances = {plr.Character} 
-    local crosshairPos = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
-
-    for _, target in pairs(game.Players:GetPlayers()) do
-        if target ~= plr and isEnemy(target) and target.Character and target.Character:FindFirstChild("HumanoidRootPart") and target.Character:FindFirstChildOfClass('Humanoid') and target.Character:FindFirstChildOfClass('Humanoid').Health > 0 then
-            
-            local targetPart = target.Character:FindFirstChild(aimbot_TargetPart) or target.Character.HumanoidRootPart
-            local screenPos, onScreen = camera:WorldToScreenPoint(targetPart.Position)
-            
-            if onScreen then
-                local dist2D = (crosshairPos - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
+    for _, v in pairs(Workspace:GetChildren()) do
+        -- Проверяем: Модель + Есть гуманоид + Живой + НЕ Игрок
+        if v:IsA("Model") and v:FindFirstChild("Humanoid") and v:FindFirstChild(TargetPart) and v.Humanoid.Health > 0 then
+            if v ~= LocalPlayer.Character and not IsPlayer(v) then
                 
-                if dist2D <= aimbot_FovSize then
-                    local origin = camera.CFrame.Position
-                    local direction = (targetPart.Position - origin) 
-                    local rayResult = workspace:Raycast(origin, direction, raycastParams)
+                local pos, onScreen = Camera:WorldToScreenPoint(v[TargetPart].Position)
+                
+                if onScreen then
+                    local magnitude = (Vector2.new(pos.X, pos.Y) - MousePos).Magnitude
                     
-                    if (not rayResult or rayResult.Instance:IsDescendantOf(target.Character)) then
-                        if dist2D < closest_2D_Dist then
-                            closest_2D_Dist = dist2D
-                            closestPlayer = target
-                        end
+                    if magnitude < ShortestDistance then
+                        ClosestTarget = v[TargetPart]
+                        ShortestDistance = magnitude
                     end
                 end
             end
         end
     end
-    return closestPlayer
+    return ClosestTarget
 end
 
-local function aimbot_aimAt(target)
-    local targetPart = target.Character:FindFirstChild(aimbot_TargetPart)
-    if not targetPart then
-        targetPart = target.Character:FindFirstChild("HumanoidRootPart")
-    end
+-- ================================================================= --
+-- ИНТЕРФЕЙС (TABS)
+-- ================================================================= --
 
-    if target and targetPart then
-        camera.CFrame = CFrame.new(camera.CFrame.Position, targetPart.Position)
-    end
-end
+local CombatTab = Window:CreateTab("Аимбот (PvE)", 4483362458)
+local CharacterTab = Window:CreateTab("Персонаж", 4483362458)
 
--- Holding MB2 Check (kalas)
-function rightMouseButtonHeld()
-    isHolding = true
-end
+-- --- Вкладка Аимбота ---
 
-function rightMouseButtonReleased()
-    if not isHolding then
-        return
-    end
-    isHolding = false
-end
+CombatTab:CreateToggle({
+   Name = "Аимбот (Зажать ПКМ)",
+   CurrentValue = false,
+   Callback = function(Value)
+       AimEnabled = Value
+   end,
+})
 
--- Обработка нажатий (только для RMB, 'K' теперь в Rayfield)
-userInput.InputBegan:connect(function(input, gameProcessed)
-    if gameProcessed then
-        return
-    end
-    
-    if input.UserInputType == Enum.UserInputType.MouseButton2 then
-        ticket = ticket + 1
-        local currentTicket = ticket
+CombatTab:CreateToggle({
+   Name = "Показывать круг FOV",
+   CurrentValue = false,
+   Callback = function(Value)
+       ShowFOV = Value
+       FOVCircle.Visible = Value
+   end,
+})
 
-        if timeHeld > 0 then
-            task.delay(timeHeld, function()
-                if ticket == currentTicket then
-                    rightMouseButtonHeld()
-                end
-            end)
-        else
-            rightMouseButtonHeld()
+CombatTab:CreateSlider({
+   Name = "Радиус FOV",
+   Range = {10, 500},
+   Increment = 1,
+   Suffix = "px",
+   CurrentValue = 100,
+   Callback = function(Value)
+       AimFOV = Value
+       FOVCircle.Radius = Value
+   end,
+})
+
+CombatTab:CreateDropdown({
+   Name = "Куда целиться",
+   Options = {"Head", "HumanoidRootPart"},
+   CurrentOption = "Head",
+   Callback = function(Option)
+       TargetPart = Option[1]
+   end,
+})
+
+-- --- Вкладка Персонажа ---
+
+CharacterTab:CreateToggle({
+   Name = "Noclip (Сквозь стены)",
+   CurrentValue = false,
+   Callback = function(Value)
+       NoclipEnabled = Value
+   end,
+})
+
+CharacterTab:CreateButton({
+    Name = "Скрыть меню (K)",
+    Callback = function()
+        Window:Toggle()
+    end,
+})
+
+-- ================================================================= --
+-- ЛОГИКА РАБОТЫ (LOOPS)
+-- ================================================================= --
+
+-- 1. Аимбот и FOV (RenderStepped - каждый кадр экрана)
+RunService.RenderStepped:Connect(function()
+    -- Обновляем положение круга
+    local MousePos = UserInputService:GetMouseLocation()
+    FOVCircle.Position = MousePos
+    FOVCircle.Radius = AimFOV
+    FOVCircle.Visible = ShowFOV
+
+    -- Логика Аимбота
+    if AimEnabled and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
+        local target = GetClosestNPC()
+        if target then
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Position)
         end
     end
 end)
 
-userInput.InputEnded:connect(function(input, gameProcessed)
-    if gameProcessed then
-        return
-    end
-
-    if input.UserInputType == Enum.UserInputType.MouseButton2 then
-        ticket = ticket + 1
-        rightMouseButtonReleased()
-    end
-end)
-
--- New Instances (для авто-фарма)
-pcall(function()
-    local part = Instance.new("Part")
-    part.Anchored = true
-    part.Size = Vector3.new(50,1,50)
-    part.CFrame = CFrame.new(10000, 10000, 10000)
-    part.Parent = game.Workspace
-
-    local part = Instance.new("Part")
-    part.Anchored = true
-    part.Size = Vector3.new(50,1,50)
-    part.CFrame = CFrame.new(-11, 33, -173)
-    part.Parent = game.Workspace
-
-    local part = Instance.new("Part")
-    part.Anchored = true
-    part.Size = Vector3.new(50,1,50)
-    part.CFrame = game.Workspace.Spawns:FindFirstChild("Chaos Insurgency").CFrame
-    part.Parent = game.Workspace
-
-    local part = Instance.new("Part")
-    part.Anchored = true
-    part.Size = Vector3.new(50,1,50)
-    part.CFrame = CFrame.new(233, 13, 511)
-    part.Parent = game.Workspace
-end)
-
--- ================================================================= --
--- 3. СОЗДАНИЕ ОДНОЙ ВКЛАДКИ "MAIN"
--- ================================================================= --
-
--- ИСПРАВЛЕНО: ЖДЕМ 5 СЕКУНД, ЧТОБЫ ИГРА ПРОГРУЗИЛАСЬ
-task.wait(5) 
-
--- Теперь, когда игра загружена, безопасно собираем списки
-local spawns = {} 
-pcall(function()
-    for i,v in ipairs(game.Workspace.Spawns:GetChildren()) do 
-        if not table.find(spawns, v.Name) then 
-            table.insert(spawns, v.Name)
-        end 
-    end
-    if #spawns == 0 then table.insert(spawns, "[Спавны не найдены]") end
-end)
-
-local playerss = {} 
-pcall(function()
-    for i,v in ipairs(game.Players:GetChildren()) do 
-        if not table.find(playerss, v.Name) then 
-            table.insert(playerss, v.Name)
-        end 
-    end
-    if #playerss == 0 then table.insert(playerss, "[Игроки не найдены]") end
-end)
-
-
--- Теперь создаем UI, когда все списки готовы
-local mainTab = Window:CreateTab("Main") -- <-- ЕДИНСТВЕННАЯ ВКЛАДКА
-
-mainTab:CreateLabel("--- ОСНОВНЫЕ ФУНКЦИИ ---")
-mainTab:CreateButton({
-   Name = "Hide Menu (K)",
-   Callback = function()
-        Window:Toggle() -- "Родная" функция Rayfield для скрытия
-   end,
-})
-mainTab:CreateButton({
-   Name = "TP To Nuke Bunker (Hidden)",
-   Callback = function()
-        pcall(function()
-        plr.Character.HumanoidRootPart.CFrame = CFrame.new(233, 15, 511)
-        end)
-   end,
-})
-mainTab:CreateButton({
-   Name = "Breach 008",
-   Callback = function()
-        pcall(function()
-        plr.Character.HumanoidRootPart.CFrame = CFrame.new(233, 17, 511)
-        wait(1)
-        fireproximityprompt(game:GetService("Workspace")["Sector 3"].ModelCI008["Meshes/Chaos Insurgency Hack Device_Cylinder"].CIHackDevicePrompt)
-        end)
-   end,
-})
-mainTab:CreateButton({
-   Name = "Breach 096",
-   Callback = function()
-        pcall(function()
-        plr.Character.HumanoidRootPart.CFrame = CFrame.new(708.509, 40.35, -159.07)
-        wait(12)
-        plr.Character.HumanoidRootPart.CFrame = CFrame.new(-171.968, 40.35, 503.986)
-        end)
-   end,
-})
-mainTab:CreateButton({
-   Name = "Sabotage Transformer",
-   Callback = function()
-        pcall(function()
-        plr.Character.HumanoidRootPart.CFrame = CFrame.new(-102, 34, -176)
-        wait(1)
-        fireproximityprompt(game.Workspace["Sector 2"].SectionB:FindFirstChild("TransformerC4").ClickPart.ProximityPrompt)
-        end)
-   end,
-})
-
-mainTab:CreateButton({
-   Name = "Authorize Nearby Players (Equip It)",
-   Callback = function()
-        pcall(function()
-        for i,v in pairs(game:GetService("Players"):GetChildren()) do 
-        game:GetService("ReplicatedStorage").Remotes.Authorise:FireServer(v)
-        end 
-        end) 
-   end,
-})
-
-mainTab:CreateToggle({
-   Name = "Auto Farm Escapes",
-   Default = false,
-   Callback = function(prt)
-        poit = prt 
-        while poit and task.wait(5) do 
-        pcall(function()
-        plr.Character.HumanoidRootPart.CFrame = CFrame.new(7.023, 36.498, -170.876)
-        wait(5)
-        plr.Character.HumanoidRootPart.CFrame = CFrame.new(-52.511, 87.748, 236.672)
-        wait(3)
-        local args = {
-            [1] = {
-                [1] = "Class - D",
-                [2] = 0,
-                [3] = false
-            },
-            [2] = false,
-            [3] = false
-        }
-        game:GetService("ReplicatedStorage").Remotes.Spawn:InvokeServer(unpack(args))
-        end) 
-        end 
-   end,
-})
-
-mainTab:CreateToggle({
-   Name = "NoClip",
-   Default = false,
-   Callback = function(gfrt)
-        lotp = gfrt
-        while lotp and task.wait() do 
-        pcall(function()
-        for i,v in pairs(plr.Character:GetDescendants()) do 
-            if v:IsA("BasePart") and v.CanCollide ~= false then
-                v.CanCollide = false
-            end 
-        end 
-        end)
-        end 
-   end,
-})
-mainTab:CreateButton({
-   Name = "Clip",
-   Callback = function()
-        pcall(function()
-        for i,v in pairs(plr.Character:GetDescendants()) do 
-            if v.Name == "HumanoidRootPart" and v.CanCollide == false then 
-                v.CanCollide = true
-            end 
-        end
-        end)
-   end,
-})
-
-
--- ================================================================= --
--- 4. ANTI-AFK И ГЛАВНЫЙ ЦИКЛ (RenderStepped)
--- ================================================================= --
-
--- Anti AFK 
-pcall(function()
-    for i,v in pairs(getconnections(game:GetService("Players").LocalPlayer.Idled)) do
-        v:Disable()
-    end
-end)
-
--- ГЛАВНЫЙ ЦИКЛ (RenderStepped)
-game:GetService("RunService").RenderStepped:Connect(function()
-    
-    -- Проверка на наличие оружия в руках
-    local equippedTool = plr.Character and plr.Character:FindFirstChildOfClass("Tool")
-    
-    -- ОБНОВЛЕНИЕ ДЛЯ КРУГА FOV
-    pcall(function()
-        if fovCircle then
-            if aimbot_ShowFov then
-                fovCircle.Radius = aimbot_FovSize 
-                fovCircle.Position = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
-                fovCircle.Visible = true
-            else
-                fovCircle.Visible = false
+-- 2. NoClip (Stepped - каждый физический кадр)
+RunService.Stepped:Connect(function()
+    if NoclipEnabled and LocalPlayer.Character then
+        for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+            if part:IsA("BasePart") and part.CanCollide then
+                part.CanCollide = false
             end
         end
-    end)
-
-
-    -- Mouse Kill Aura
-    if hub and isHolding and equippedTool and task.wait(.04) then
-        pcall(function()
-            local target = ClosestPlayerToMouse() 
-            if target then 
-                local args = {
-                    [1] = {
-                        [1] = target.Character.Head.Position.X,
-                        [2] = target.Character.Head.Position.Y,
-                        [3] = target.Character.Head.Position.Z
-                    },
-                    [2] = target.Character.Head
-                }
-                game:GetService("ReplicatedStorage").Remotes.ShootRemote:FireServer(unpack(args))
-            end
-        end)
     end
-    
-    -- ЛОГИКА АИМБОТА
-    if aimbot_Enabled and isHolding and equippedTool then
-        pcall(function()
-            local target = aimbot_getClosestPlayer() 
-            if target then
-                aimbot_aimAt(target)
-            end
-        end)
-    end
-    
-end)
-
--- Загрузка сохраненной конфигурации (если есть)
-pcall(function()
-    Rayfield:LoadConfiguration()
 end)
