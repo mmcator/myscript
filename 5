@@ -12,18 +12,18 @@ local Window = Rayfield:CreateWindow({
         Enabled = false,
     },
     KeySystem = false,
-    ToggleKey = Enum.KeyCode.RightControl -- Твой бинд для меню (Right Control)
+    ToggleKey = Enum.KeyCode.RightControl -- Твой бинд для меню
 })
 
 local AimingTab = Window:CreateTab("Semi Rage", 4483362458)
 
--- ==========================================
--- СЕКЦИЯ: AIMBOT
--- ==========================================
-local AimbotSection = AimingTab:CreateSection("Aimbot Settings")
+local testSection = AimingTab:CreateSection("First Section")
 
-AimbotSection:CreateButton({
-    Name = "1. Load Aimbot",
+-- ==========================================
+-- КНОПКА: AIMBOT
+-- ==========================================
+testSection:CreateButton({
+    Name = "Load Aimbot",
     Callback = function()
         print("Aimbot loaded")
         pcall(function()
@@ -75,7 +75,7 @@ AimbotSection:CreateButton({
         Environment.FOVSettings = {
             Enabled = true,
             Visible = true,
-            Amount = 90, -- Значение по умолчанию, будет меняться слайдером
+            Amount = 90,
             Color = "255, 255, 255",
             LockedColor = "255, 70, 70",
             Transparency = 0.5,
@@ -89,11 +89,17 @@ AimbotSection:CreateButton({
         
         --// Core Functions
         local function Encode(Table)
-            if Table and type(Table) == "table" then return HttpService:JSONEncode(Table) end
+            if Table and type(Table) == "table" then
+                return HttpService:JSONEncode(Table)
+            end
         end
+        
         local function Decode(String)
-            if String and type(String) == "string" then return HttpService:JSONDecode(String) end
+            if String and type(String) == "string" then
+                return HttpService:JSONDecode(String)
+            end
         end
+        
         local function GetColor(Color)
             local R = tonumber(string.match(Color, "([%d]+)[%s]*,[%s]*[%d]+[%s]*,[%s]*[%d]+"))
             local G = tonumber(string.match(Color, "[%d]+[%s]*,[%s]*([%d]+)[%s]*,[%s]*[%d]+"))
@@ -103,7 +109,11 @@ AimbotSection:CreateButton({
         
         local function SendNotification(TitleArg, DescriptionArg, DurationArg)
             if Environment.Settings.SendNotifications then
-                StarterGui:SetCore("SendNotification", {Title = TitleArg, Text = DescriptionArg, Duration = DurationArg})
+                StarterGui:SetCore("SendNotification", {
+                    Title = TitleArg,
+                    Text = DescriptionArg,
+                    Duration = DurationArg
+                })
             end
         end
         
@@ -121,7 +131,11 @@ AimbotSection:CreateButton({
         
         local function GetClosestPlayer()
             if not Environment.Locked then
-                if Environment.FOVSettings.Enabled then RequiredDistance = Environment.FOVSettings.Amount else RequiredDistance = 2000 end
+                if Environment.FOVSettings.Enabled then
+                    RequiredDistance = Environment.FOVSettings.Amount
+                else
+                    RequiredDistance = 2000
+                end
         
                 for _, v in next, Players:GetPlayers() do
                     if v ~= LocalPlayer then
@@ -220,7 +234,9 @@ AimbotSection:CreateButton({
                                     if Animation then Animation:Cancel() end
                                     Environment.FOVCircle.Color = GetColor(Environment.FOVSettings.Color)
                                 end
-                            else Running = true end
+                            else
+                                Running = true
+                            end
                         end
                     end)
                 end
@@ -242,6 +258,7 @@ AimbotSection:CreateButton({
             end)
         end
         
+        --// Functions
         Environment.Functions = {}
         function Environment.Functions:Exit()
             SaveSettings()
@@ -251,39 +268,37 @@ AimbotSection:CreateButton({
             getgenv().Aimbot = nil
         end
         
-        if not Drawing or not getgenv then SendNotification(Title, "Your exploit does not support this script", 3) return end
+        --// Support Check
+        if not Drawing or not getgenv then
+            SendNotification(Title, "Your exploit does not support this script", 3)
+            return
+        end
         
+        --// Load
         Load()
         SendNotification(Title, "Aimbot script loaded.", 5)
     end,
 })
 
-AimbotSection:CreateSlider({
-    Name = "FOV Radius",
-    Range = {10, 500},
-    Increment = 1,
-    Suffix = "px",
-    CurrentValue = 90,
-    Flag = "AimbotFOVSlider",
-    Callback = function(Value)
-        -- Меняем размер круга, если аимбот уже загружен
-        if getgenv().Aimbot and getgenv().Aimbot.FOVSettings then
-            getgenv().Aimbot.FOVSettings.Amount = Value
-        end
-    end,
-})
-
 -- ==========================================
--- СЕКЦИЯ: ESP
+-- КНОПКА: ESP
 -- ==========================================
-local VisualsSection = AimingTab:CreateSection("Visuals (ESP)")
-
-VisualsSection:CreateButton({
-    Name = "1. Load Named ESP",
+testSection:CreateButton({
+    Name = "Load Named ESP",
     Callback = function()
         print("ESP Loaded. Disable with Q")
-        local function API_Check() if Drawing == nil then return "No" else return "Yes" end end
-        if API_Check() == "No" then return end
+        local function API_Check()
+            if Drawing == nil then return "No" else return "Yes" end
+        end
+        
+        if API_Check() == "No" then
+            game:GetService("StarterGui"):SetCore("SendNotification",{
+                Title = "Ghostware",
+                Text = "ESP script could not be loaded because your exploit is unsupported.",
+                Duration = 5
+            })
+            return
+        end
         
         local Players = game:GetService("Players")
         local RunService = game:GetService("RunService")
@@ -295,12 +310,7 @@ VisualsSection:CreateButton({
         _G.DefaultSettings = false
         _G.TeamCheck = false
         _G.ESPVisible = true
-        
-        -- Если цвет еще не задан через ColorPicker, ставим дефолтный
-        if not _G.TextColor then 
-            _G.TextColor = Color3.fromRGB(255, 187, 212) 
-        end
-        
+        _G.TextColor = Color3.fromRGB(255, 187, 212)
         _G.TextSize = 14
         _G.Center = true
         _G.Outline = true
@@ -320,7 +330,7 @@ VisualsSection:CreateButton({
                             ESP.Center = _G.Center
                             ESP.Outline = _G.Outline
                             ESP.OutlineColor = _G.OutlineColor
-                            ESP.Color = _G.TextColor -- Берет цвет из глобальной переменной
+                            ESP.Color = _G.TextColor
                             ESP.Transparency = _G.TextTransparency
                             ESP.Font = _G.TextFont
         
@@ -336,8 +346,12 @@ VisualsSection:CreateButton({
                                 else
                                     ESP.Visible = _G.ESPVisible
                                 end
-                            else ESP.Visible = false end
-                        else ESP.Visible = false end
+                            else
+                                ESP.Visible = false
+                            end
+                        else
+                            ESP.Visible = false
+                        end
                     end)
                     Players.PlayerRemoving:Connect(function() ESP.Visible = false end)
                 end
@@ -366,9 +380,15 @@ VisualsSection:CreateButton({
                                     
                                     if _G.TeamCheck == true then 
                                         if Players.LocalPlayer.Team ~= Player.Team then ESP.Visible = _G.ESPVisible else ESP.Visible = false end
-                                    else ESP.Visible = _G.ESPVisible end
-                                else ESP.Visible = false end
-                            else ESP.Visible = false end
+                                    else
+                                        ESP.Visible = _G.ESPVisible
+                                    end
+                                else
+                                    ESP.Visible = false
+                                end
+                            else
+                                ESP.Visible = false
+                            end
                         end)
                     end
                 end)
@@ -381,6 +401,11 @@ VisualsSection:CreateButton({
         UserInputService.InputBegan:Connect(function(Input)
             if Input.KeyCode == _G.DisableKey and not Typing then
                 _G.ESPVisible = not _G.ESPVisible
+                if _G.SendNotifications == true then
+                    game:GetService("StarterGui"):SetCore("SendNotification",{
+                        Title = "Ghostware", Text = "ESP visibility set to "..tostring(_G.ESPVisible), Duration = 3
+                    })
+                end
             end
         end)
         
@@ -388,22 +413,10 @@ VisualsSection:CreateButton({
     end,
 })
 
-VisualsSection:CreateColorPicker({
-    Name = "ESP Color",
-    Color = Color3.fromRGB(255, 187, 212),
-    Flag = "ESPColorPicker",
-    Callback = function(Value)
-        -- Обновляем глобальную переменную цвета в реальном времени
-        _G.TextColor = Value
-    end
-})
-
 -- ==========================================
--- СЕКЦИЯ: WORLD
+-- КНОПКА: FULLBRIGHT
 -- ==========================================
-local WorldSection = AimingTab:CreateSection("World")
-
-WorldSection:CreateButton({
+testSection:CreateButton({
     Name = "Fullbright",
     Callback = function()
         print("Fullbright Activated")
